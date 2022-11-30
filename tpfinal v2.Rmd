@@ -1,0 +1,330 @@
+---
+title: "Trabajo Practico Final"
+author: "Alfredo Lopez - Verónica Agüero"
+subtitle: Enfoque Estadístico del Aprendizaje - Año 2022
+output:
+  html_document:
+    df_print: paged
+---
+
+<style type="text/css">
+div.main-container {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r}
+# Librerias utilizadas
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)  # estilos de gráficos
+library(ggrepel)   # etiquetas de texto más prolijas que las de ggplot
+library(GGally)
+library(knitr)
+library(reshape)
+library(tidyr)
+library(mvnormtest)
+library(MASS)
+library(biotools)
+```
+# 1. Objetivo
+
+Aplicar los métodos de clasificación supervisada de Análisis Discriminante Lineal y Cuadrático para elaborar modelos que permitan clasificar si una muestra de agua es apta para el consumo humano o no.
+
+# 2. Datos
+
+El dataset utilizado en el presente trabajo contiene 9 métricas de la calidad del agua para 3276 muestras diferentes, las diferentes métricas son: ph, Hardness, Solids, Chloramines, Sulfate, Conductivity, Organic_carbon, Trihalomethanes y Turbidity. A partir de dichas variables se tiene finalmente la variable Potability que indica si el agua es no potable (valor 0) o potable (valor 1).
+
+Fuente: https://www.kaggle.com/datasets/adityakadiwal/water-potability
+
+
+# 3. Análisis Exploratorio y Preprocesamiento
+
+**Lectura del dataset**
+```{r}
+dfwater = read.csv(file='Datasets/water_potability.csv', encoding = "UTF-8")
+```
+
+**Verificación del tamaño del dataset**
+```{r}
+dfwater %>% dim_desc()
+```
+
+**Visualización de estructura y variables**
+
+```{r}
+head(dfwater)
+```
+
+```{r}
+summary(dfwater)
+```
+Se observa que las variables ph, Sulfate y Trihalomethanes presentan valores perdidos, por ende a continuación se pone énfasis en los mismos para observar con claridad la cantidad y el porcentaje que representan.
+
+```{r}
+# Verificación de valores faltantes
+
+tabla_faltantes = dfwater %>%
+                              gather(.,
+                                     key = "variables",
+                                     value = "valores") %>%
+                              group_by(variables) %>%
+                              summarise(
+                                cant_faltantes = sum(is.na(valores)),
+                                porcentaje_faltantes = sum(is.na(valores))/nrow(dfwater)*100
+                              )
+
+tabla_faltantes
+```
+
+A partir de la cantidad y porcentaje de valores faltantes encontrados, con el fin de que los mismos no influyan en los modelos se decidió quitar las filas con valores perdidos.
+
+* Nota: Otra alternativa es reemplazar los valores faltantes por la media o mediana de la variable.
+
+```{r}
+# Eliminación de filas con datos faltantes
+
+dfwater <- dfwater %>% drop_na(ph) %>% drop_na(Sulfate) %>% drop_na(Trihalomethanes)
+
+# Verificación del nuevo tamaño del dataset
+dfwater %>% dim_desc()
+```
+A continuación, se verifica la cantidad de observaciones según la clasificación de las muestras (Potable, No potable)
+
+```{r}
+datos_grafico_torta <- dfwater %>%
+                        group_by(Potability) %>%
+                        count() %>%
+                        mutate(Potabilidad = case_when(Potability == 0 ~ "No potable",
+                                                           Potability == 1 ~ "Potable"))
+
+ggplot(datos_grafico_torta, aes(x = "", y = n, fill = Potabilidad)) +
+  geom_col() +
+  geom_text(aes(label = n),
+            position = position_stack(vjust = 0.5)) +
+  coord_polar(theta = "y") +
+  theme_void()
+```
+
+**Análisis de correlación**
+
+```{r}
+ggpairs(data = dfwater, upper = list(continuous = wrap("cor", size = 2.5, hjust=0.5)), progress=FALSE)
+```
+Se observa que todas las variables presentan una correlación demasiado debil con la variable de clasificación Potability.
+
+**Normalización**
+
+```{r}
+#View(dfwater)
+# Funcion Normalizacion Min-Max
+fn_normalizacion <- function (x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+# Agregacion de las variables normalizadas
+dfwater_norm <- dfwater %>%
+              mutate(ph_norm = fn_normalizacion(ph),
+                     Hardness_norm = fn_normalizacion(Hardness),
+                     Solids_norm = fn_normalizacion(Solids),
+                     Chloramines_norm = fn_normalizacion(Chloramines),
+                     Sulfate_norm = fn_normalizacion(Sulfate),
+                     Conductivity_norm = fn_normalizacion(Conductivity),
+                     Organic_carbon_norm = fn_normalizacion(Organic_carbon),
+                     Trihalomethanes_norm = fn_normalizacion(Trihalomethanes),
+                     Turbidity_norm = fn_normalizacion(Turbidity)
+                     )
+
+# Obtencion de las variables normalizadas
+dfwater <- dfwater_norm %>%
+              dplyr::select(ph_norm,Hardness_norm,Solids_norm,Chloramines_norm,Sulfate_norm,Conductivity_norm,
+                            Organic_carbon_norm,Trihalomethanes_norm,Turbidity_norm,Potability)
+
+# Renombramiento de las variables
+dfwater <- dfwater %>%
+              dplyr::rename(ph = ph_norm,
+                     Hardness  = Hardness_norm,
+                     Solids = Solids_norm,
+                     Chloramines = Chloramines_norm,
+                     Sulfate = Sulfate_norm,
+                     Conductivity = Conductivity_norm,
+                     Organic_carbon = Organic_carbon_norm,
+                     Trihalomethanes = Trihalomethanes_norm,
+                     Turbidity = Turbidity_norm
+                      )
+```
+
+# 4. Cumplimiento de condiciones
+
+## 4.1 Análisis de Normalidad
+
+### 4.1.1 Normalidad Univariante
+
+```{r}
+#par(mfrow=c(6,3))
+
+#for (k in 1:9) {
+#     v <- names(dfwater)[k]
+#     for (i in 1:2) {
+#         l <- levels(dfwater$Potability)[i]
+#         x <- dfwater[dfwater$Potability == l, v]
+#         hist(x, proba = T, col = grey(0.5), main = paste("potability", l), xlab = v)
+#         x0 <- seq(min(dfwater[, k]), max(dfwater[, k]), le = 10)
+#         lines(x0, dnorm(x0, mean(x), sd(x)), col = "red", lwd = 2)
+#    }
+#}
+```
+### 4.1.2 Normalidad multivariante
+
+```{r}
+# Test de normalidad - Clase: No potable
+
+mshapiro.test(t(dfwater[dfwater$Potability==0,1:9]))
+```
+```{r}
+# Test de normalidad - Clase: Potable
+
+mshapiro.test(t(dfwater[dfwater$Potability==1,1:9]))
+```
+Se observa que para ambas clases no se cumple que las observaciones sigan una distribución normal multivariante.
+
+## 4.2 Análisis de igualdad de matrices de varianzas y covarianzas
+
+```{r}
+boxM(data = dfwater[, 1:9], grouping = dfwater[,10])
+```
+Se observa que no se cumple la condición de matriz de covarianza común entre las dos clases.
+
+Dado que no se cumplen las dos condiciones, a priori lo conveniente sería aplicar QDA en lugar de LDA. Sin embargo, igualmente se aplicará LDA para luego comparar los resultados obtenidos con la aplicación de QDA.
+
+# 5. Cálculo de función discriminante
+
+Definición de Potability como factor
+
+```{r}
+dfwater$Potability = as.factor(dfwater$Potability)
+```
+
+División del set de datos en entrenamiento (80%) y en test (20%)
+
+```{r}
+# Fijación de semilla
+
+set.seed(500)
+
+# Partición de los datos
+
+dt <- sort(sample(nrow(dfwater), nrow(dfwater)*.8))
+datos_train <- dfwater[dt,]
+datos_test <- dfwater[-dt,]
+```
+
+Definición de fórmulas
+
+```{r}
+#formula_regresora <- formula(Potability ~ ph + Hardness + Solids + Chloramines + Sulfate + Conductivity + Organic_carbon + Trihalomethanes + Turbidity)
+#formula_regresora <- formula(Potability ~ Solids + Chloramines + Turbidity)
+formula_regresora <- formula(Potability ~ ph + Solids + Chloramines + Sulfate + Conductivity + Organic_carbon + Turbidity)
+```
+
+## 5.1 Análisis discriminante líneal (LDA)
+
+```{r}
+modelo1=NULL
+
+modelo1$lda <- lda(formula_regresora,datos_train)
+modelo1$lda
+```
+Las salidas del modelo calculado muestran:
+
+* Probabilidad a-priori de los grupos: Proporcion de las observaciones en cada grupo ($\pi_0$ = 0.598 y $\pi_1$ = 0.401).
+* Group means: Media de cada variable en cada grupo y que luego son utilizadas como estimadores de $\mu_k$.
+* Coefficients of linear discriminants: Muestra la combinación líneal de las variables predictoras utilizadas para definir la regla de decisión LDA, en este caso:
+
+  LD = 4.09 x ph + 4.5 x Solids + 3.79 x Chloramines + 1.86 x Sulfate + 0.78 x Conductivity - 1.98 x Organic_carbon + 1.72 x Turbidity
+
+## 5.2 Análisis discriminante cuadrático (QDA)
+
+```{r}
+modelo2=NULL
+
+modelo2$qda <- qda(formula_regresora,datos_train)
+modelo2$qda
+```
+Las salidas del modelo calculado muestran:
+
+* Probabilidad a-priori de los grupos y medias de cada variable en cada grupo que en ambos casos coinciden con las salidas del modelo LDA.
+* En este caso, no se muestran los coeficientes de la regla de decisión LDA ya que el clasificador QDA se basa en una función cuadrática de las variables predictoras.
+
+# 6. Evaluación de los modelos
+
+## 6.1 Evaluación LDA
+
+Se evalua el modelo LDA en el dataset de test.
+```{r}
+lda.pred <-  predict(object = modelo1$lda, newdata = datos_test)
+```
+
+La función predict retorna:
+
+* class: clase predicha de las observaciones
+* Probabilidad a posteriori de que cada observación pertenezca a una clase determinada. La salida es una matriz donde las columnas son las clases, las filas son las diferentes observaciones y los valores son las probabilidades mencionadas.
+* x: muestra los discriminantes lineales.
+```{r}
+# Predicciones de clase
+head(lda.pred$class)
+```
+```{r}
+# Probabilidad a posteriori
+head(lda.pred$posterior)
+```
+```{r}
+# Discriminante lineal
+head(lda.pred$x)
+```
+A continuación, se genera la matriz de confusión del modelo LDA y se calcula el porcentaje de errores del modelo.
+
+```{r}
+# Matriz de confusion del modelo LDA
+table(lda.pred$class, datos_test$Potability, dnn = c("Clase predicha", "Clase real"))
+```
+```{r}
+# Test error rate del modelo LDA
+mean(lda.pred$class != datos_test$Potability)
+```
+Se tiene que el porcentaje de errores del modelo LDA es del 40%.
+
+## 6.2 Evaluación QDA
+
+```{r}
+qda.pred <-  predict(object = modelo2$qda, newdata = datos_test)
+```
+
+La función predict para el caso de QDA retorna:
+
+* class: clase predicha de las observaciones
+* Probabilidad a posteriori de que cada observación pertenezca a una clase determinada. Al igual que para LDA, la salida es una matriz donde las columnas son las clases, las filas son las diferentes observaciones y los valores son las probabilidades mencionadas.
+
+```{r}
+# Predicciones de clase
+head(qda.pred$class)
+```
+```{r}
+# Probabilidad a posteriori
+head(qda.pred$posterior)
+```
+A continuación, se genera la matriz de confusión del modelo QDA y se calcula el porcentaje de errores del modelo.
+
+```{r}
+# Matriz de confusion del modelo QDA
+table(qda.pred$class, datos_test$Potability, dnn = c("Clase predicha", "Clase real"))
+```
+
+```{r}
+# Test error rate del modelo QDA
+mean(qda.pred$class != datos_test$Potability)
+```
+Se tiene que el porcentaje de errores del modelo QDA es del 30%.
