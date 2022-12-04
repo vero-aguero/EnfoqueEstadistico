@@ -1,10 +1,12 @@
 ---
-title: "Trabajo Practico Final"
+title: "Trabajo Práctico Final"
 author: "Alfredo Lopez - Verónica Agüero"
-subtitle: Enfoque Estadístico del Aprendizaje - Año 2022
-output:
-  html_document:
+subtitle: "Enfoque Estadístico del Aprendizaje - Año 2022"
+output: 
+  html_notebook:
     df_print: paged
+    toc: yes
+    toc_float: yes
 ---
 
 <style type="text/css">
@@ -29,6 +31,9 @@ library(tidyr)
 library(mvnormtest)
 library(MASS)
 library(biotools)
+library(MVN)
+library(reshape2)
+library(gridExtra)
 ```
 # 1. Objetivo
 
@@ -82,7 +87,7 @@ tabla_faltantes
 
 A partir de la cantidad y porcentaje de valores faltantes encontrados, con el fin de que los mismos no influyan en los modelos se decidió quitar las filas con valores perdidos.
 
-* Nota: Otra alternativa es reemplazar los valores faltantes por la media o mediana de la variable.
+**NOTA**: Otra alternativa es reemplazar los valores faltantes por la media o mediana de la variable.
 
 ```{r}
 # Eliminación de filas con datos faltantes
@@ -109,14 +114,64 @@ ggplot(datos_grafico_torta, aes(x = "", y = n, fill = Potabilidad)) +
   theme_void()
 ```
 
-**Análisis de correlación**
+## Análisis de correlación
+
+Para ver el comportamiento de las variables en función de la variable de clasificación Potability en sus diferentes valores, vamos a analizar la correlación de las variables.
 
 ```{r}
 ggpairs(data = dfwater, upper = list(continuous = wrap("cor", size = 2.5, hjust=0.5)), progress=FALSE)
 ```
 Se observa que todas las variables presentan una correlación demasiado debil con la variable de clasificación Potability.
+Si analizamos en detalle, podemos observar que las variables ph, Solids, Chloramines, Trihalomethanes y Turbidity tiene una BAJA correlación POSITIVA mientras que Hardness, Sulfate, Conductivity y Organic_carbon tinen una BAJA correlación NEGATIVA con la variable de clasificación Potability.
 
-**Normalización**
+```{r}
+names(dfwater)
+```
+
+Para analizar el comportamiento de las variables realizaremos una serie de gráficos para más detalle
+
+## Box Plot por variable
+
+Con el Box-plot por variable vamos a poder observar el comportamiento de cada una de las variables en función de los valores que puede tomar la variable de clasificación.
+
+```{r}
+par(mfrow=c(2,5))
+for (k in 1:9) {
+  variable_name <- names(dfwater)[k]
+  boxplot(dfwater[[variable_name]] ~ Potability, data = dfwater, main = variable_name)
+}
+```
+De este gráfico podemos observar que las variables en cada una de las clases tienen una media con un valor similar. **Importante tener en cuenta esto porque lo vamos a desarrollar más adelante cuando apliquemos el método.**
+
+## Distribución en Histograma por variables
+
+```{r}
+# Representación de distribución en histogramas
+p1 <- ggplot(data = dfwater, aes(x = ph)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p2 <- ggplot(data = dfwater, aes(x = Hardness)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p3 <- ggplot(data = dfwater, aes(x = Solids)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p4 <- ggplot(data = dfwater, aes(x = Chloramines)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p5 <- ggplot(data = dfwater, aes(x = Sulfate)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p6 <- ggplot(data = dfwater, aes(x = Conductivity)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p7 <- ggplot(data = dfwater, aes(x = Organic_carbon)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p8 <- ggplot(data = dfwater, aes(x = Trihalomethanes)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p9 <- ggplot(data = dfwater, aes(x = Turbidity)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, p9)
+```
+
+## Normalización
+
+Debido a la diferente escala que maneja cada una de las variables, se decide normalizarlas para aplicar la técnica.
 
 ```{r}
 #View(dfwater)
@@ -157,65 +212,181 @@ dfwater <- dfwater %>%
                       )
 ```
 
-# 4. Cumplimiento de condiciones
+
+# 4. Cumplimiento de Supuestos
 
 ## 4.1 Análisis de Normalidad
 
-### 4.1.1 Normalidad Univariante
-```{r}
-names(dfwater)
-```
+Para nuestro caso tenemos $k = 2$ tendríamos 2 clases, entonces se define:
 
-```{r}
-hist(dfwater$Chloramines, proba = T, col = grey(0.8), main = "")
-curve(dnorm(x, mean=mean(dfwater$Chloramines), sd=sd(dfwater$Chloramines)), 
-      add=TRUE, 
-      col = "red")
-```
+Para K=1
+$f_1(x) = P(Y = 0|X = x) = \frac{1}{\sqrt{2\pi\sigma_1}}exp(\frac{-1}{2\sigma_1^2}(x - \mu_1)^2)$
+
+Para k=2
+$f_2(x) = P(Y = 0|X = x) = \frac{1}{\sqrt{2\pi\sigma_2}}exp(\frac{-1}{2\sigma_2^2}(x - \mu_2)^2)$
+
+
+Uno de los supuestos para la aplicación del método de Análisis Discriminante Lineal, es el supuesto de normalidad, vamos a iniciar el análisis revisando en principio la normalidad univariante.
+
+
+### 4.1.1 Normalidad Univariante
+
+Consiste en representar los datos mediante un histograma y superponer la curva de una distribución  ormal con la misma media y desviación estándar que muestran los datos.
+
+El análisis de normalidad se va a realizar sobre las variables cuantitativas, en este caso: 
+
+Al realizar el análisis de la normalidad, puede suceder que si se observa que los datos tienen una distribución normal multivariante, entonces cada una de las variables tiene una disrtibución normal univariante. 
+
+**Histograma por variable**
+
+Para _Potability = 0_:
 
 ```{r}
 par(mfrow= c(2,5))
 
 for (k in 1:9) {
-  v <- names(dfwater)[k]
-  hist(dfwater[[v]], proba = T, col = grey(0.8), main = "", xlab=v)
-  curve(dnorm(x, mean=mean(dfwater$Chloramines), sd=sd(dfwater$Chloramines)), 
-              add=TRUE, 
-              col = "red")
+  variable_name <- names(dfwater)[k]
+  x <- dfwater[dfwater$Potability == 0, variable_name ]
+  hist(dfwater[[variable_name]], proba = T, col = grey(0.8), main = "", xlab=variable_name)
+  x0 <- seq(min(dfwater[, k]), max(dfwater[, k]), le = 50)
+  lines(x0, dnorm(x0, mean(x), sd(x)), col = "red", lwd = 2)
 }
 ```
 
-### 4.1.2 Normalidad multivariante
+Para _Potability = 1_:
 
 ```{r}
-# Test de normalidad - Clase: No potable
+par(mfrow= c(2,5))
 
-mshapiro.test(t(dfwater[dfwater$Potability==0,1:9]))
+for (k in 1:9) {
+  variable_name <- names(dfwater)[k]
+  x <- dfwater[dfwater$Potability == 1, variable_name ]
+  hist(dfwater[[variable_name]], proba = T, col = grey(0.8), main = "", xlab=variable_name)
+  x0 <- seq(min(dfwater[, k]), max(dfwater[, k]), le = 50)
+  lines(x0, dnorm(x0, mean(x), sd(x)), col = "red", lwd = 2)
+}
 ```
+
+**QQ-Plot por variable**
+
+Para _Potability = 0_:
 
 ```{r}
-# Test de normalidad - Clase: Potable
+par(mfrow= c(2,5))
 
-mshapiro.test(t(dfwater[dfwater$Potability==1,1:9]))
+for (k in 1:9) {
+  variable_name <- names(dfwater)[k]
+  x <- dfwater[dfwater$Potability == 0, variable_name ]
+  qqnorm(dfwater[Potability == 0, k], 
+       col = "grey", 
+       main = "")
+  qqline(dfwater[Potability  == 0, k], col = "red")
+}
 ```
-Se observa que para ambas clases no se cumple que las observaciones sigan una distribución normal multivariante.
+
+Para _Potability = 1_:
+
+```{r}
+par(mfrow= c(2,5))
+
+for (k in 1:9) {
+  variable_name <- names(dfwater)[k]
+  x <- dfwater[dfwater$Potability == 1, variable_name ]
+  qqnorm(dfwater[Potability == 1, k], 
+       col = "lightgreen", 
+       main = "")
+  qqline(dfwater[Potability  == 1, k], col = "red")
+}
+```
+
+Para testear la Normalidad Univariante utilizaremos el test de **Shapiro-Wilks** sobre cada variable predictora.
+
+El test de Shapiro-Wilks plantea como hipótesis nula que los datos de la muestra provienen de una Distribución Normal.
+
+Se define:
+
+$H_0: X \backsim N(\mu,\sigma^2)$ Los datos se distribuyen normal.
+
+$H_1: X \nsim N(\mu,\sigma^2)$ Los datos no se distribuyen normal.
+
+Con este test se busca rechazar la hipótesis nula para $\alpha = 0.05$.
+
+Definición de la variable objetivo Potability como factor
+
+```{r}
+dfwater$Potability = as.factor(dfwater$Potability)
+```
+
+Aplicamos el test de Shapiro Wilks por cada variable, en función de los diferentes valores que puede tomar la clase.
+
+```{r}
+# Contraste de normalidad Shapiro-Wilk para cada variable en cada rendimiento
+dfwater.tidy <- melt(dfwater, value.name = "valor")
+
+dfwater.tidy %>% group_by(Potability, variable) %>% summarise(p_value_Shapiro.test = shapiro.test(valor)$p.value) %>% mutate_if(is.numeric, round, digits = 10)
+```
+
+**NOTA:** Se puede observar que hay evidencias de falta de normalidad univariante en todas las variables empleadas como predictoras. En más detalle, para Potability=0, las variables Hardness, Solids, Chloramines, Sulfate, Conductivity  rechazan la hipótesis nula de normalidad, mientras que para las variables ph, Organic_carbon, Trihalomethanes, Turbidity NO se rechaza la hipótesis nula de normalidad. Para Potability=1, las variables ph, Hardness, Solids, Chloramines, Sulfate, Conductivity  rechazan la hipótesis nula de normalidad, mientras que para las variables Organic_carbon, Trihalomethanes, Turbidity NO se rechaza la hipótesis nula de normalidad.
+
+### 4.1.2 Normalidad Multivariante
+
+Además de testear la normalidad univariante, se requiere evaluar la normalidad multivariante. Antes de aplicar algún test se analizará la presencia de valores atípicos, ya que los outliers pueden ser causa de no cumplir esta condición. Es conveniente verificar si los datos tienen outliers multivariantes (valores extremos para combinaciones de variables) antes de comenzar con el análisis multivariante.
+
+El _multivariateOutlierMethod_ emple el método de cuantiles basado en la distancia de Mahalanobis y la distancia de Mahalanobis ajustada.
+
+```{r}
+par(mfrow = c(1, 2))
+# Distancia de Mahalanobis
+outliers <- mvn(data = dfwater[,-10], multivariateOutlierMethod = "quan")
+# Distancia ajustada de Mahalanobis
+outliers.adj <- mvn(data = dfwater[,-10], multivariateOutlierMethod = "adj")
+```
+
+De este análisis podemos observar que tenemos una proporción de moderada a baja de presencia de outliers en las clases, se observa alrededor del 5 y 8.5% de outliers.
+
+**Test MVN de Royston **
+
+El test de Royston se basa en el test de *Shapiro-Wilk*. Utilizamos la libraría MVN. en este caso no es posible aplicar la técnica ya que el número de observaciones (2011) supera la cantidad permitida por este test en la librería usada (2000)
+
+```{r}
+royston <- mvn(data = dfwater[,-10], mvnTest = "royston", multivariatePlot = "qq")
+```
+
+**Test MVN de Mardia**
+
+El test de Mardia calcula los coeficientes de asimetría y curtosis y la corresponiente significancia estadística, combinando ambos para dar un resultado global de normalidad multivariante (MVN):
+
+```{r}
+mardia <- mvn(data = dfwater[,-10], mvnTest = "mardia")
+mardia$multivariateNormality
+```
+
+**Test MVN de Henze-Zirkler**
+
+```{r}
+henze.zirkler <- mvn(data = dfwater[,-10], mvnTest = "hz")
+henze.zirkler$multivariateNormality
+```
+**NOTA**: Se pudo aplicar 2 de los 3 test propuestos y muestran evidencias significativas con $\alpha = 0.05$ de que los datos no siguen una Distribución Normal Multivaraiante, esto puede ocurrir porque hay falta de normalidad univariante en varias variables como mencionamos anteriormente (Ver Apartado 4.1.1). Esto va a afectar a la precisión de las técnicas que se desarrollarán en este trabajo.
 
 ## 4.2 Análisis de igualdad de matrices de varianzas y covarianzas
+
+El test M de Box se utiliza para determinar la homogeneidad de las matrices de covarianza obtenidas a partir de datos normales multivariados según uno o más factores de clasificación. Tiene como hipotesis nula que las matrices de covarianza son iguales.
+
+**NOTA**: Este test es sensible a la falta de normalidad multivariante.
+
+$H_0: Las\ matrices\ de\ covarianza\ son\ iguales$
+
+$H_1: Las\ matrices\ de\ covarianza\ no\ son\ iguales$
 
 ```{r}
 boxM(data = dfwater[, 1:9], grouping = dfwater[,10])
 ```
 Se observa que no se cumple la condición de matriz de covarianza común entre las dos clases.
 
-Dado que no se cumplen las dos condiciones, a priori lo conveniente sería aplicar QDA en lugar de LDA. Sin embargo, igualmente se aplicará LDA para luego comparar los resultados obtenidos con la aplicación de QDA.
+Dado que no se cumplen las dos condiciones, a priori lo conveniente sería aplicar QDA en lugar de LDA. Sin embargo, igualmente se aplicará LDA a fines del análisis del presente trabajo para luego comparar los resultados obtenidos con la aplicación de QDA.
 
 # 5. Cálculo de función discriminante
-
-Definición de Potability como factor
-
-```{r}
-dfwater$Potability = as.factor(dfwater$Potability)
-```
 
 División del set de datos en entrenamiento (80%) y en test (20%)
 
@@ -233,13 +404,34 @@ datos_test <- dfwater[-dt,]
 
 Definición de fórmulas
 
+Se analizaron diferentes alternativas y se decidió elegir aquellas variables que tienen mayor correlación.
+
 ```{r}
 #formula_regresora <- formula(Potability ~ ph + Hardness + Solids + Chloramines + Sulfate + Conductivity + Organic_carbon + Trihalomethanes + Turbidity)
 #formula_regresora <- formula(Potability ~ Solids + Chloramines + Turbidity)
 formula_regresora <- formula(Potability ~ ph + Solids + Chloramines + Sulfate + Conductivity + Organic_carbon + Turbidity)
+#formula_regresora <- formula(Potability ~ ph + Hardness + Solids + Chloramines + Sulfate + Conductivity)
 ```
 
 ## 5.1 Análisis discriminante líneal (LDA)
+
+### 5.1.1. Marco Teórico
+
+El Análisis Discriminante Lineal o Linear Discrimiant Analysis (LDA) es un método de clasificación supervisado de variables cuantitativas en el que dos o más grupos son conocidos a priori y nuevas observaciones se clasifican en uno de ellos en función de sus características. Haciendo uso del teorema de Bayes, LDA estima la probabilidad de que una observación, dado un determinado valor de los predictores, pertenezca a cada una de las clases de la variable cualitativa, P(Y=k|X=x). Finalmente se asigna la observación a la clase k para la que la probabilidad predicha es mayor.
+
+En el contexto de la clasificación, mediante el teorema de Bayes se calcula la probabilidad de que la variable respuesta Y pertenezca a cada uno de los posibles niveles, dados unos determinados valores de los predictores.
+
+Suponiendo que $\pi_k$ representa la *probabilidad a priori* de que una observación al azar provenga de la clase k de la variable respuesta Y, que se puede estimar como $\hat{\pi_k}=n_k/n$ y siendo $f_k(X)$ la función de densidad de probabilidad condicional de X para una observación que proviene de la clase k, el teorema de Bayes establece que:
+
+$P(pertenecer\ a\ la\ clase\ k | valor\ x\ observado) = \frac{pertenecer\ a\ la\ clase\ k\ y\ observar\ x}{P(observar\ x)}$
+
+Lo que en términos de probabilidades se puede traducir como:
+
+$P(Y = k | X = x) = \frac{\pi_kP(X=x|Y=k)}{\sum_{j=0}^k\pi_jP(X=x|Y=j)} = \frac{\pi_kf_k(x)}{\sum_{j=0}^k\pi_jf_j(x)}$
+
+donde $p_k(x)$ representa la *probabilidad a posteriori* de que una observación X = x pertenezcan a la clase k. **Cada observación se cladificará dentro del nivel que tiene la probabilidad $p_k(x) más alta**.
+
+##5.1.2 Aplicación Práctica
 
 ```{r}
 modelo1=NULL
@@ -249,14 +441,33 @@ modelo1$lda
 ```
 Las salidas del modelo calculado muestran:
 
-* Probabilidad a-priori de los grupos: Proporcion de las observaciones en cada grupo ($\pi_0$ = 0.598 y $\pi_1$ = 0.401).
+* Probabilidad a-priori de los grupos: Proporción de las observaciones en cada grupo ($\pi_0$ = 0.598 y $\pi_1$ = 0.401).
 * Group means: Media de cada variable en cada grupo y que luego son utilizadas como estimadores de $\mu_k$.
 * Coefficients of linear discriminants: Muestra la combinación líneal de las variables predictoras utilizadas para definir la regla de decisión LDA, en este caso:
 
   LD = 4.09 x ph + 4.5 x Solids + 3.79 x Chloramines + 1.86 x Sulfate + 0.78 x Conductivity - 1.98 x Organic_carbon + 1.72 x Turbidity
+  
+**Visualización del Modelo**
+
+```{r}
+plot(modelo1$lda)
+```
 
 ## 5.2 Análisis discriminante cuadrático (QDA)
 
+### 5.2.1. Marco Teórico
+
+El clasificador cuadrático o Quadratic Discriminat Analysis QDA se asemeja en gran medida al LDA, con la única diferencia de que el QDA considera que cada clase k tiene su propia matriz de covarianza $(∑k)$ y, como consecuencia, la función discriminante toma forma cuadrática:
+
+$log(P(Y=k|X=x)) = - \frac{1}{2}log|\sum_k| - \frac{1}{2}(x-\mu_k)^T\sum_k^{-1}(x - \mu_k) + log (\pi_k)$
+
+Para poder calcular la probabilidad a posteriori a partir de esta ecuación discriminante es necesario estimar, para cada clase, $(∑k)$, $\mu_k$ y $\pi_k$ a partir de la muestra. Cada nueva observación se clasifica en aquella clase para la que el valor de la posterior probability sea mayor.
+
+La ecuación no es una función lineal de x, sino cuadrática (de donde deriva el nombre del método “cuadrático”). Debido a esta propiedad, el QDA genera límites de decisión curvos, no lineales, por lo que es aplicable para casos en los que la separación entre grupos no es lineal.
+
+### 5.2.2. Aplicación práctica
+
+Se va a utilizar la función _qda_ de la librería .
 ```{r}
 modelo2=NULL
 
@@ -282,6 +493,7 @@ La función predict retorna:
 * class: clase predicha de las observaciones
 * Probabilidad a posteriori de que cada observación pertenezca a una clase determinada. La salida es una matriz donde las columnas son las clases, las filas son las diferentes observaciones y los valores son las probabilidades mencionadas.
 * x: muestra los discriminantes lineales.
+
 ```{r}
 # Predicciones de clase
 head(lda.pred$class)
@@ -300,10 +512,14 @@ A continuación, se genera la matriz de confusión del modelo LDA y se calcula e
 # Matriz de confusion del modelo LDA
 table(lda.pred$class, datos_test$Potability, dnn = c("Clase predicha", "Clase real"))
 ```
+
+Nótese que en este caso al aplicar el método podemos observar que la mayoría de las observaciones se clasifican como Potability = 0. No puede clasificar correctamente las clases.
+
 ```{r}
 # Test error rate del modelo LDA
 mean(lda.pred$class != datos_test$Potability)
 ```
+
 Se tiene que el porcentaje de errores del modelo LDA es del 40%.
 
 ## 6.2 Evaluación QDA
@@ -332,8 +548,24 @@ A continuación, se genera la matriz de confusión del modelo QDA y se calcula e
 table(qda.pred$class, datos_test$Potability, dnn = c("Clase predicha", "Clase real"))
 ```
 
+En este caso vemos mayor separación de las clases aunque sigue persistiendo la alta tasa de error.
+
 ```{r}
 # Test error rate del modelo QDA
 mean(qda.pred$class != datos_test$Potability)
 ```
 Se tiene que el porcentaje de errores del modelo QDA es del 30%.
+
+# 7. Conclusiones
+
+LDA es un método mucho menos flexible que QDA y se puede observar alta tasa de errores. Ewl cumplimiento de los supuestos es un punto muy importante ya que de las pruebas realizadas podemos observar que la sensibilidad que presentan algunos tests se ve altamente afectada, obteniendo resultados poco satisfactorios.
+
+Si el límite de Bayes es lineal, LDA es una aproximación más precisa que QDA. Esto es algo que podemos observar en este caso, como se observan las muestras de ambas clases superpuestas, es difícil trazar el límite de decisión de Bayes. En este caso pudimos observar que los supuestos no se cumplen, ya en el primer test de Normal Multivariante por lo que mejores resultados se van a obtener si se aplica QDA.
+
+# Bibliografía
+
+1. An Introduction to Statistical Learning: with Applications in R (Springer Texts in Statistics)
+2. Análisis Discriminante Lineal Y Cuadrático - Cristina Gil Martínez: https://github.com/CristinaGil/Estadistica_machine_learning_R
+3. Análisis discriminante lineal (LDA) y análisis discriminante cuadrático (QDA) - Joaquín Amat Rodrigo: https://www.cienciadedatos.net/documentos/28_linear_discriminant_analysis_lda_y_quadratic_discriminant_analysis_qda#Ejemplo_QDA_con_2_predictores
+
+
