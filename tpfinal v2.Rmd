@@ -124,10 +124,6 @@ ggpairs(data = dfwater, upper = list(continuous = wrap("cor", size = 2.5, hjust=
 Se observa que todas las variables presentan una correlación demasiado debil con la variable de clasificación Potability.
 Si analizamos en detalle, podemos observar que las variables ph, Solids, Chloramines, Trihalomethanes y Turbidity tiene una BAJA correlación POSITIVA mientras que Hardness, Sulfate, Conductivity y Organic_carbon tinen una BAJA correlación NEGATIVA con la variable de clasificación Potability.
 
-```{r}
-names(dfwater)
-```
-
 Para analizar el comportamiento de las variables realizaremos una serie de gráficos para más detalle
 
 ## Box Plot por variable
@@ -558,7 +554,7 @@ Se tiene que el porcentaje de errores del modelo QDA es del 30%.
 
 # 7. Conclusiones
 
-LDA es un método mucho menos flexible que QDA y se puede observar alta tasa de errores. Ewl cumplimiento de los supuestos es un punto muy importante ya que de las pruebas realizadas podemos observar que la sensibilidad que presentan algunos tests se ve altamente afectada, obteniendo resultados poco satisfactorios.
+LDA es un método mucho menos flexible que QDA y se puede observar alta tasa de errores. El cumplimiento de los supuestos es un punto muy importante ya que de las pruebas realizadas podemos observar que la sensibilidad que presentan algunos tests se ve altamente afectada, obteniendo resultados poco satisfactorios.
 
 Si el límite de Bayes es lineal, LDA es una aproximación más precisa que QDA. Esto es algo que podemos observar en este caso, como se observan las muestras de ambas clases superpuestas, es difícil trazar el límite de decisión de Bayes. En este caso pudimos observar que los supuestos no se cumplen, ya en el primer test de Normal Multivariante por lo que mejores resultados se van a obtener si se aplica QDA.
 
