@@ -367,7 +367,7 @@ henze.zirkler$multivariateNormality
 
 ## 4.2 Análisis de igualdad de matrices de varianzas y covarianzas
 
-El test M de Box se utiliza para determinar la homogeneidad de las matrices de covarianza obtenidas a partir de datos normales multivariados según uno o más factores de clasificación. Tiene como hipotesis nula que las matrices de covarianza son iguales.
+El test M de Box se utiliza para determinar la homogeneidad de las matrices de covarianza obtenidas a partir de datos normales multivariados según uno o más factores de clasificación. Tiene como hipotesis nula que las matrices de covarianza son iguales. Es de la librería _biotools_.
 
 **NOTA**: Este test es sensible a la falta de normalidad multivariante.
 
@@ -557,6 +557,22 @@ Se tiene que el porcentaje de errores del modelo QDA es del 30%.
 LDA es un método mucho menos flexible que QDA y se puede observar alta tasa de errores. El cumplimiento de los supuestos es un punto muy importante ya que de las pruebas realizadas podemos observar que la sensibilidad que presentan algunos tests se ve altamente afectada, obteniendo resultados poco satisfactorios.
 
 Si el límite de Bayes es lineal, LDA es una aproximación más precisa que QDA. Esto es algo que podemos observar en este caso, como se observan las muestras de ambas clases superpuestas, es difícil trazar el límite de decisión de Bayes. En este caso pudimos observar que los supuestos no se cumplen, ya en el primer test de Normal Multivariante por lo que mejores resultados se van a obtener si se aplica QDA.
+
+```{r}
+library(ggplot2)
+ggplot(data.frame(x = c(-4, 4)), aes(x)) +
+stat_function(fun = dnorm, args = list(mean = -2.5, sd = 1),
+              color = "firebrick") + 
+stat_function(fun = dnorm, args = list(mean = 2.5, sd = 1), color = "green3") +
+geom_vline(xintercept = 0, linetype = "longdash") 
+```
+
+```{r}
+p <- ggplot(data = dfwater, aes(x = Sulfate)) + 
+geom_histogram(position = "identity", alpha = 0.5, aes(fill = as.factor(Potability)))+labs(fill = "Potability")
+p
+```
+
 
 # Bibliografía
 
