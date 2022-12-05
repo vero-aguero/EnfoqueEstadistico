@@ -87,8 +87,6 @@ tabla_faltantes
 
 A partir de la cantidad y porcentaje de valores faltantes encontrados, con el fin de que los mismos no influyan en los modelos se decidió quitar las filas con valores perdidos.
 
-**NOTA**: Otra alternativa es reemplazar los valores faltantes por la media o mediana de la variable.
-
 ```{r}
 # Eliminación de filas con datos faltantes
 
